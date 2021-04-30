@@ -135,6 +135,8 @@ softly.assertAll();
 
 ### `findPath`
 
+TODO
+
 ## Working with Edges
 
 An `edge` is incident on vertices, so an `edge` cannot exist without a vertice

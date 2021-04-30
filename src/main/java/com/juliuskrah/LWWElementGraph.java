@@ -168,6 +168,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         return List.empty();
     }
 
+    // TODO this method makes no sense
     public Set<T> findPath(T src, T dest) {
         // to keep track of whether a vertex is visited or not
         Set<T> visited = HashSet.empty();
