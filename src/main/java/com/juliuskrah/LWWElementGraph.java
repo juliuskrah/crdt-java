@@ -1,10 +1,13 @@
 package com.juliuskrah;
 
 import java.util.Objects;
+import java.util.Stack;
 
 import io.vavr.collection.HashMap;
+import io.vavr.collection.HashSet;
 import io.vavr.collection.List;
 import io.vavr.collection.Map;
+import io.vavr.collection.Set;
 import io.vavr.control.Option;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.EmitFailureHandler;
@@ -37,8 +40,10 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
     }
 
     private boolean prepareAddEdge(T element1, T element2) {
+        vectorClock = vectorClock.increment();
         var result = doAddEdge(element1, element2);
-        commands.emitNext(new AddEdgeCommand<T>(crdtId, element1, element2), EmitFailureHandler.FAIL_FAST);
+        commands.emitNext(new AddEdgeCommand<T>(crdtId, element1, element2, vectorClock), 
+            EmitFailureHandler.FAIL_FAST);
         return result;
     }
 
@@ -59,8 +64,10 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
     }
 
     private void prepareRemoveVertex(T element) {
+        vectorClock = vectorClock.increment();
         doRemoveVertex(element);
-        commands.emitNext(new RemoveVertexCommand<>(crdtId, element), EmitFailureHandler.FAIL_FAST);
+        commands.emitNext(new RemoveVertexCommand<>(crdtId, element, vectorClock), //
+            EmitFailureHandler.FAIL_FAST);
     }
 
     @SuppressWarnings("deprecation")
@@ -76,8 +83,10 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
     }
 
     private void prepareRemoveEdge(T element1, T element2) {
+        vectorClock = vectorClock.increment();
         doRemoveEdge(element1, element2);
-        commands.emitNext(new RemoveEdgeCommand<>(crdtId, element1, element2), EmitFailureHandler.FAIL_FAST);
+        commands.emitNext(new RemoveEdgeCommand<>(crdtId, element1, element2, vectorClock), //
+            EmitFailureHandler.FAIL_FAST);
     }
 
     private void doRemoveEdge(T element1, T element2) {
@@ -94,8 +103,31 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     protected Option<? extends GraphCommand<T>> processCommand(GraphCommand<T> command) {
+        if (vectorClock.compareTo(command.vectorClock) < 0 ) {
+            if(command instanceof AddVertexCommand) {
+                var addVertex = (AddVertexCommand<T>) command;
+                vectorClock = vectorClock.merge(command.vectorClock);
+                doAddVertex(addVertex.element, command.vectorClock);
+                return Option.of(command);
+            } else if(command instanceof RemoveVertexCommand) {
+                var removeVertex = (RemoveVertexCommand<T>) command;
+                doRemoveVertex(removeVertex.element);
+                return Option.of(command);
+            } else if(command instanceof AddEdgeCommand) {
+                var addEdge = (AddEdgeCommand<T>) command;
+                doAddEdge(addEdge.element1, addEdge.element2);
+                return Option.of(command);
+            } else if(command instanceof RemoveEdgeCommand) {
+                var removeEdge = (RemoveEdgeCommand<T>) command;
+                doRemoveEdge(removeEdge.element1, removeEdge.element2);
+                return Option.of(command);
+            }
+        }
         return Option.none();
     }
 
@@ -136,33 +168,62 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         return List.empty();
     }
 
+    public Set<T> findPath(T src, T dest) {
+        // to keep track of whether a vertex is visited or not
+        Set<T> visited = HashSet.empty();
+        Stack<T> path = new Stack<>();
+        // include the current node in the path
+        path.push(src);
+        if (src == dest) {
+            return visited;
+        }
+        
+        while (!path.isEmpty()) {
+            T element = path.pop();
+            if (!visited.contains(element)) {
+                visited = visited.add(element);
+                for (Vertex<T> vertex : findAdjacentVertices(element)) {              
+                    path.push(vertex.getValue());
+                }
+            }
+        }
+        return visited;
+    }
+
     public int vertexSize() {
         return this.vertices.size();
     }
 
-    public static class GraphCommand<T> extends CRDTCommand {
+    public boolean containsVertex(T element) {
+        if(elements.get(element).isEmpty()) {
+            return false;
+        }
+        var vertex = new Vertex<>(element, elements.get(element).get());
+        return vertices.containsKey(vertex);
+    }
 
-        public GraphCommand(String crdtId) {
+    public static class GraphCommand<T> extends CRDTCommand {
+        private final VectorClock vectorClock;
+        public GraphCommand(String crdtId, VectorClock vectorClock) {
             super(crdtId);
+            this.vectorClock = vectorClock;
         }
     }
 
     public static class AddVertexCommand<T> extends GraphCommand<T> {
         private final T element;
-        private final VectorClock vectorClock;
 
         public AddVertexCommand(String crdtId, T element, VectorClock vectorClock) {
-            super(crdtId);
+            super(crdtId, vectorClock);
             this.element = element;
-            this.vectorClock = vectorClock;
         }
     }
 
     public static class RemoveVertexCommand<T> extends GraphCommand<T> {
         private final T element;
 
-        public RemoveVertexCommand(String crdtId, T element) {
-            super(crdtId);
+        public RemoveVertexCommand(String crdtId, T element, VectorClock vectorClock) {
+            super(crdtId, vectorClock);
             this.element = element;
         }
     }
@@ -171,8 +232,8 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         private final T element1;
         private final T element2;
         
-        public AddEdgeCommand(String crdtId, T element1, T element2) {
-            super(crdtId);
+        public AddEdgeCommand(String crdtId, T element1, T element2, VectorClock vectorClock) {
+            super(crdtId, vectorClock);
             this.element1 = element1;
             this.element2 = element2;
         }
@@ -181,8 +242,8 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
     public static class RemoveEdgeCommand<T> extends GraphCommand<T> {
         private final T element1;
         private final T element2;
-        public RemoveEdgeCommand(String crdtId, T element1, T element2) {
-            super(crdtId);
+        public RemoveEdgeCommand(String crdtId, T element1, T element2, VectorClock vectorClock) {
+            super(crdtId, vectorClock);
             this.element1 = element1;
             this.element2 = element2;
         }

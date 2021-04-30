@@ -79,7 +79,7 @@ To add a new vertex:
 ```java
 private final CRDTStoreFactory factory = CRDTStoreFactory.getInstance();
 final CRDTStore crdtStore1 = factory.crdtStore("ND-41");
-// create an LWW-Element-Graph and find a second replica from store
+// create an LWW-Element-Graph
 final var replica1 = crdtStore1.<String>createLWWElementGraph("15-AD");
 
 SoftAssertions softly = new SoftAssertions();
@@ -108,6 +108,18 @@ softly.assertAll();
 
 ### `containsVertex`
 
+To check if a vertex is in graph
+
+```java
+LWWElementGraph replica1 = ...
+SoftAssertions softly = new SoftAssertions();
+// julius is a vertex in graph
+softly.assertThat(replica1.containsVertex("julius")).isTrue();
+// duh
+softly.assertThat(replica1.containsVertex("notfound")).isFalse();
+softly.assertAll();
+```
+
 ### `findAdjacentVertices`
 
 To query for all vertices connected to a vertex:
@@ -124,6 +136,8 @@ softly.assertAll();
 ### `findPath`
 
 ## Working with Edges
+
+An `edge` is incident on vertices, so an `edge` cannot exist without a vertice
 
 ### `addEdge`
 
@@ -158,7 +172,66 @@ softly.assertAll();
 
 ## Working with Replicas
 
+To simulate two replicas, I'd be using an [`InMemoryCRDTStore`](./src/main/java/com/juliuskrah/InMemoryCRDTStore.java).
+
 ### `connect` / `merge`
+
+Create two replicas and update them concurrently or independently.
+
+```java
+// create two CRDT Stores and connect them
+final CRDTStore crdtStore1 = factory.crdtStore("ND-41");
+final CRDTStore crdtStore2 = factory.crdtStore("ND-42");
+crdtStore1.connect(crdtStore2);
+
+// create an LWW-Element-Graph and find a second replica from store
+final var replica1 = crdtStore1.<String>createLWWElementGraph("15-AD");
+final var replica2 = crdtStore2.<String>findLWWElementGraph("15-AD").get();
+
+SoftAssertions softly = new SoftAssertions();
+// 5 vertices [julius, james, zumar, alice, freda] added to either replica
+replica1.addVertex("julius");
+replica1.addVertex("james");
+replica2.addVertex("zumar");
+replica2.addVertex("alice");
+replica2.addVertex("freda");
+// 5 vertices were added across 2 replicas
+softly.assertThat(replica1.vertexSize()).isEqualTo(5);
+softly.assertThat(replica2.vertexSize()).isEqualTo(5);
+
+// add edges [[alice,zumar], [james,zumar], [julius,alice], [alice,freda], [james,freda], [julius,james]]
+// across 2 repicas
+replica1.addEdge("alice", "zumar");
+replica1.addEdge("james", "zumar");
+replica2.addEdge("julius", "alice");
+replica2.addEdge("alice", "freda");
+replica2.addEdge("james", "freda");
+replica1.addEdge("julius", "james");
+// both replicas should see the update
+softly.assertThat(replica1.findAdjacentVertices("julius")).isNotEmpty()
+    .extracting(Vertex::getValue).containsOnly("james", "alice");
+softly.assertThat(replica2.findAdjacentVertices("james")).isNotEmpty()
+    .extracting(Vertex::getValue).containsOnly("julius", "freda", "zumar");
+
+// disconnect the stores simulating a network issue, brain split
+crdtStore1.disconnect(crdtStore2);
+
+// replica2 is updated while in a disconnected state
+replica2.addEdge("julius", "james");
+softly.assertThat(replica2.findAdjacentVertices("julius")).isNotEmpty()
+    .extracting(Vertex::getValue).containsOnly("james", "alice");
+// replica1 hasn't seen the update yet
+softly.assertThat(replica1.findAdjacentVertices("julius")).isNotEmpty() //	
+    .extracting(Vertex::getValue).containsOnly("alice");
+
+// reconnect the stores
+crdtStore1.connect(crdtStore2);
+// replica 2 is synchronised now
+softly.assertThat(replica1.findAdjacentVertices("julius")).isNotEmpty() //	
+    .extracting(Vertex::getValue).containsOnly("alice", "james");
+
+softly.assertAll();
+```
 
 ## Test Coverage
 
