@@ -35,6 +35,7 @@ public class InMemoryCRDTStore implements CRDTStore {
     @SuppressWarnings("unchecked")
     private void registerDefaultFactories() {
         registerFactory(LWWRegister.class, LWWRegister::new);
+        registerFactory(LWWElementGraph.class, LWWElementGraph::new);
         registerFactory(LWWElementSet.class, LWWElementSet::new);
         // registerFactory(LWWElementSet.class, (nodeId, crdtId) -> new LWWElementSet(nodeId, crdtId, LWWBias.REMOVE));
         registerFactory(RGA.class, RGA::new);

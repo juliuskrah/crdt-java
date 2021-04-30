@@ -73,7 +73,22 @@ public interface CRDTStore extends Publisher<CRDTDefinition> {
     @SuppressWarnings("unchecked")
     default <E> Option<LWWElementSet<E>> findLWWElementSet(String crtdId) {
         final Option<? extends CRDT<? extends CRDTCommand>> option = findCrdt(crtdId);
-        return option.flatMap(crtd -> crtd instanceof LWWElementSet ? Option.of((LWWElementSet<E>) crtd) : Option.none());
+        return option
+                .flatMap(crtd -> crtd instanceof LWWElementSet ? Option.of((LWWElementSet<E>) crtd) : Option.none());
+    }
+
+    /**
+     * Retrieves an LWWElementGraph from the replica
+     * 
+     * @param <T>    element
+     * @param crtdId the ID
+     * @return LWWElementGraph if available
+     */
+    @SuppressWarnings("unchecked")
+    default <T> Option<LWWElementGraph<T>> findLWWElementGraph(String crtdId) {
+        final Option<? extends CRDT<? extends CRDTCommand>> option = findCrdt(crtdId);
+        return option.flatMap(
+                crtd -> crtd instanceof LWWElementGraph ? Option.of((LWWElementGraph<T>) crtd) : Option.none());
     }
 
     /**
@@ -144,7 +159,7 @@ public interface CRDTStore extends Publisher<CRDTDefinition> {
     /**
      * Creates a new LWW-Element-Set. An identifier is computed
      * 
-     * @param <E>    element type
+     * @param <E> element type
      * @return LWWElementSet
      */
     default <E> LWWElementSet<E> createLWWElementSet() {
@@ -161,6 +176,28 @@ public interface CRDTStore extends Publisher<CRDTDefinition> {
     @SuppressWarnings("unchecked")
     default <E> LWWElementSet<E> createLWWElementSet(String crdtId) {
         return createCrdt(LWWElementSet.class, crdtId);
+    }
+
+    /**
+     * Creates a new LWW-Element-Set. An identifier is computed
+     * 
+     * @param <T> element type
+     * @return LWWElementSet
+     */
+    default <T> LWWElementGraph<T> createLWWElementGraph() {
+        return createLWWElementGraph(UUID.randomUUID().toString());
+    }
+
+    /**
+     * Creates a new LWW-Element-Graph using the provided identifier
+     * 
+     * @param <T>    element type
+     * @param crdtId the identifier
+     * @return LWWElementGraph
+     */
+    @SuppressWarnings("unchecked")
+    default <T> LWWElementGraph<T> createLWWElementGraph(String crdtId) {
+        return createCrdt(LWWElementGraph.class, crdtId);
     }
 
     /**
