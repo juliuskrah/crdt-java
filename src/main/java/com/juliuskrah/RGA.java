@@ -21,9 +21,10 @@ import reactor.core.publisher.Sinks.EmitFailureHandler;
  * @author Julius Krah
  * @implNote We start from less complex implementations to test our synchronization
  */
-public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
+@SuppressWarnings("unchecked")
+public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand> {
     private final String crdtId;
-    private final Sinks.Many<RGACommand<E>> commands = Sinks.many().replay().all();
+    private final Sinks.Many<RGACommand> commands = Sinks.many().replay().all();
     private final Vertex<E> start;
 
     private Map<VectorClock, Vertex<E>> vertices;
@@ -52,7 +53,7 @@ public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
         }
     }
 
-    private Option<RGACommand<E>> processCommand(RGACommand<E> command) {
+    private Option<RGACommand> processCommand(RGACommand command) {
         if (command instanceof AddRightCommand) {
             final AddRightCommand<E> addRightCommand = (AddRightCommand<E>) command;
             if (findVertex(addRightCommand.newVertexClock).isEmpty()) {
@@ -67,7 +68,7 @@ public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
         } else if (command instanceof RemoveCommand) {
             final VectorClock removedClock = ((RemoveCommand<E>) command).vectorClock;
             final Option<Vertex<E>> vertex = findVertex(removedClock);
-            return vertex.map(this::doRemove).flatMap(result -> result? Option.of(command) : Option.none());
+            return vertex.map(this::doRemove).flatMap(result -> Boolean.TRUE.equals(result)? Option.of(command) : Option.none());
         }
 
         return Option.none();
@@ -136,7 +137,7 @@ public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
      * {@inheritDoc}
      */
     @Override
-    public void subscribe(Subscriber<? super RGACommand<E>> s) {
+    public void subscribe(Subscriber<? super RGACommand> s) {
         commands.asFlux().subscribe(s);
     }
 
@@ -152,9 +153,9 @@ public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
      * {@inheritDoc}
      */
     @Override
-    public void subscribeTo(Publisher<? extends RGACommand<E>> publisher) {
+    public void subscribeTo(Publisher<? extends RGACommand> publisher) {
         Flux.from(publisher).onTerminateDetach().subscribe(command -> {
-            final Option<RGACommand<E>> newCommand = processCommand(command);
+            final Option<RGACommand> newCommand = processCommand(command);
             newCommand.peek(commands::tryEmitNext);
         });
     }
@@ -197,13 +198,13 @@ public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
         return vertex.getValue();
     }
 
-    public abstract static class RGACommand<E> extends CRDTCommand {
+    public abstract static class RGACommand extends CRDTCommand {
         protected RGACommand(String crdtId) {
             super(crdtId);
         }
     }
 
-    public static final class RemoveCommand<E> extends RGACommand<E> {
+    public static final class RemoveCommand<E> extends RGACommand {
 
         private final VectorClock vectorClock;
 
@@ -218,7 +219,6 @@ public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
 
             if (o == null || getClass() != o.getClass()) return false;
 
-            @SuppressWarnings("unchecked")
             RemoveCommand<E> that = (RemoveCommand<E>) o;
 
             return Objects.equals(vectorClock, that.vectorClock);
@@ -230,7 +230,7 @@ public class RGA<E> extends AbstractList<E> implements CRDT<RGA.RGACommand<E>> {
         }
     }
 
-    public static final class AddRightCommand<E> extends RGACommand<E> {
+    public static final class AddRightCommand<E> extends RGACommand {
 
         private final VectorClock anchorClock;
         private final E newVertexValue;

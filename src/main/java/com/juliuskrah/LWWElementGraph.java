@@ -1,8 +1,8 @@
 package com.juliuskrah;
 
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.Objects;
-import java.util.Stack;
-
 import io.vavr.collection.HashMap;
 import io.vavr.collection.HashSet;
 import io.vavr.collection.List;
@@ -18,7 +18,7 @@ import reactor.core.publisher.Sinks.EmitFailureHandler;
  * @author Julius Krah
  * @see https://www.khanacademy.org/computing/computer-science/algorithms/graph-representation/a/representing-graphs
  */
-public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphCommand<T>> {
+public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphCommand> {
     private Map<Vertex<T>, List<Vertex<T>>> vertices;
     /**
      * Temporary holder to store vector clocks
@@ -42,7 +42,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
     private boolean prepareAddEdge(T element1, T element2) {
         vectorClock = vectorClock.increment();
         var result = doAddEdge(element1, element2);
-        commands.emitNext(new AddEdgeCommand<T>(crdtId, element1, element2, vectorClock), 
+        commands.emitNext(new AddEdgeCommand<>(crdtId, element1, element2, vectorClock), 
             EmitFailureHandler.FAIL_FAST);
         return result;
     }
@@ -107,7 +107,8 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
      * {@inheritDoc}
      */
     @Override
-    protected Option<? extends GraphCommand<T>> processCommand(GraphCommand<T> command) {
+    @SuppressWarnings("unchecked")
+    protected Option<? extends GraphCommand> processCommand(GraphCommand command) {
         if (vectorClock.compareTo(command.vectorClock) < 0 ) {
             if(command instanceof AddVertexCommand) {
                 var addVertex = (AddVertexCommand<T>) command;
@@ -172,7 +173,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
     public Set<T> findPath(T src, T dest) {
         // to keep track of whether a vertex is visited or not
         Set<T> visited = HashSet.empty();
-        Stack<T> path = new Stack<>();
+        Deque<T> path = new LinkedList<>();
         // include the current node in the path
         path.push(src);
         if (src == dest) {
@@ -203,7 +204,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         return vertices.containsKey(vertex);
     }
 
-    public static class GraphCommand<T> extends CRDTCommand {
+    public static class GraphCommand extends CRDTCommand {
         private final VectorClock vectorClock;
         public GraphCommand(String crdtId, VectorClock vectorClock) {
             super(crdtId);
@@ -211,7 +212,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         }
     }
 
-    public static class AddVertexCommand<T> extends GraphCommand<T> {
+    public static class AddVertexCommand<T> extends GraphCommand {
         private final T element;
 
         public AddVertexCommand(String crdtId, T element, VectorClock vectorClock) {
@@ -220,7 +221,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         }
     }
 
-    public static class RemoveVertexCommand<T> extends GraphCommand<T> {
+    public static class RemoveVertexCommand<T> extends GraphCommand {
         private final T element;
 
         public RemoveVertexCommand(String crdtId, T element, VectorClock vectorClock) {
@@ -229,7 +230,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         }
     }
 
-    public static class AddEdgeCommand<T> extends GraphCommand<T> {
+    public static class AddEdgeCommand<T> extends GraphCommand {
         private final T element1;
         private final T element2;
         
@@ -240,7 +241,7 @@ public class LWWElementGraph<T> extends AbstractCRDT<LWWElementGraph.GraphComman
         }
     }
 
-    public static class RemoveEdgeCommand<T> extends GraphCommand<T> {
+    public static class RemoveEdgeCommand<T> extends GraphCommand {
         private final T element1;
         private final T element2;
         public RemoveEdgeCommand(String crdtId, T element1, T element2, VectorClock vectorClock) {

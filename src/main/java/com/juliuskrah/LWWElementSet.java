@@ -35,7 +35,7 @@ public class LWWElementSet<E> extends AbstractCRDT<LWWElementSet.SetCommand<E>> 
      */
     private void prepareAdd(E element) {
         doAdd(element);
-        commands.emitNext(new SetCommand<E>(crdtId, element, vectorClock, 1), EmitFailureHandler.FAIL_FAST);
+        commands.emitNext(new SetCommand<>(crdtId, element, vectorClock, 1), EmitFailureHandler.FAIL_FAST);
     }
 
     /**
@@ -79,7 +79,7 @@ public class LWWElementSet<E> extends AbstractCRDT<LWWElementSet.SetCommand<E>> 
      */
     private void prepareRemove(E element) {
         doRemove(element);
-        commands.emitNext(new SetCommand<E>(crdtId, element, vectorClock, 0), EmitFailureHandler.FAIL_FAST);
+        commands.emitNext(new SetCommand<>(crdtId, element, vectorClock, 0), EmitFailureHandler.FAIL_FAST);
     }
 
     /**
@@ -143,7 +143,7 @@ public class LWWElementSet<E> extends AbstractCRDT<LWWElementSet.SetCommand<E>> 
      * A BIAS value that determines whether to keep add or remove elements
      * when they share the same vectorClock
      */
-    public static enum LWWBias {
+    public enum LWWBias {
         ADD, REMOVE
     }
 
